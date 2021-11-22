@@ -24,6 +24,7 @@ GET_ALL = 'leTodoCadastro'
 DEL_CAD = 'deleteCadastro'
 GET_EST = 'leEstatisticas'
 SET_UPD = 'updateCadastro'
+PING = 'ping'
 
 app = Flask(__name__)
 app.debug = 'DEBUG' in os.environ
@@ -107,6 +108,8 @@ def inbox(ws):
                 chats.send(ws, sqlite_get_estatisticas(message))
             elif get_json_cmd(message) == SET_UPD:
                 sqlite_update(message)
+            elif get_json_cmd(message) == PING:
+                chats.send(ws, '{ "cmd": "ping" }')
 
 
 @sockets.route('/receive')
