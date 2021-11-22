@@ -13,16 +13,23 @@ import redis
 import gevent
 from flask import Flask, render_template
 from flask_sockets import Sockets
+from sqlite_json import sqlite_set, sqlite_get, sqlite_get_all, get_json_cmd, sqlite_del, \
+    sqlite_get_estatisticas, sqlite_update, init_db
 
 REDIS_URL = os.environ['REDIS_URL']
 REDIS_CHAN = 'chat'
+SET_CAD = 'salvaCadastro'
+GET_CAD = 'leCadastro'
+GET_ALL = 'leTodoCadastro'
+DEL_CAD = 'deleteCadastro'
+GET_EST = 'leEstatisticas'
+SET_UPD = 'updateCadastro'
 
 app = Flask(__name__)
 app.debug = 'DEBUG' in os.environ
 
 sockets = Sockets(app)
 redis = redis.from_url(REDIS_URL)
-
 
 
 class ChatBackend(object):
@@ -32,6 +39,10 @@ class ChatBackend(object):
         self.clients = list()
         self.pubsub = redis.pubsub()
         self.pubsub.subscribe(REDIS_CHAN)
+        if init_db():
+            app.logger.info(u'DB EXISTS')
+        else:
+            app.logger.info(u'DB CREATED')
 
     def __iter_data(self):
         for message in self.pubsub.listen():
@@ -62,6 +73,7 @@ class ChatBackend(object):
         """Maintains Redis subscription in the background."""
         gevent.spawn(self.run)
 
+
 chats = ChatBackend()
 chats.start()
 
@@ -69,6 +81,7 @@ chats.start()
 @app.route('/')
 def hello():
     return render_template('index.html')
+
 
 @sockets.route('/submit')
 def inbox(ws):
@@ -80,7 +93,21 @@ def inbox(ws):
 
         if message:
             app.logger.info(u'Inserting message: {}'.format(message))
-            redis.publish(REDIS_CHAN, message)
+            if get_json_cmd(message) == REDIS_CHAN:
+                redis.publish(REDIS_CHAN, message)
+            elif get_json_cmd(message) == SET_CAD:
+                sqlite_set(message)
+            elif get_json_cmd(message) == GET_CAD:
+                chats.send(ws, sqlite_get(message))
+            elif get_json_cmd(message) == GET_ALL:
+                chats.send(ws, sqlite_get_all(message))
+            elif get_json_cmd(message) == DEL_CAD:
+                sqlite_del(message)
+            elif get_json_cmd(message) == GET_EST:
+                chats.send(ws, sqlite_get_estatisticas(message))
+            elif get_json_cmd(message) == SET_UPD:
+                sqlite_update(message)
+
 
 @sockets.route('/receive')
 def outbox(ws):
